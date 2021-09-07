@@ -27,7 +27,6 @@ max_linear_velocity = 0.5
 # Max angular velocity (rad/s)
 max_angular_velocity = 1.0
 
-
 def move(path):
 
     global control_client, robot_frame_id, pub
@@ -36,26 +35,21 @@ def move(path):
     while path.poses:
         response = control_client(path)
         setpoint = response.setpoint
-        new_path = response.new_path
-  
+        path = response.new_path
          # Transform Setpoint from service client
         transform = tf_buffer.lookup_transform(robot_frame_id,setpoint.header.frame_id,rospy.Time())
-        transformed_setpoint = tf2_geometry_msgs.do_transform_point(setpoint, transform)
-        
+        transformed_setpoint = tf2_geometry_msgs.do_transform_point(setpoint, transform)   
         # Create Twist message from the transformed Setpoint
         twist_msg = Twist()
         twist_msg.angular.z = min(atan2(transformed_setpoint.point.y, transformed_setpoint.point.x), max_angular_velocity)
         twist_msg.linear.x = min(hypot(transformed_setpoint.point.x, transformed_setpoint.point.y), max_linear_velocity)
-        # Limit the linear speed if robot needs to turn hard (avoids wall collisions)
-        if twist_msg.angular.z > 0.75:
+        # Stop burger if a hard turn needs to be done
+        if twist_msg.angular.z > 0.6:
             twist_msg.linear.x = 0
         # Publish Twist
         pub.publish(twist_msg)
         #sleeps fpr 1/rate seconds
         rate.sleep()
-        # Call service client again if the returned path is not empty and do stuff again
-        path = new_path
-    
     # Send 0 control Twist to stop robot
     twist_msg.angular.z = 0
     twist_msg.linear.x =0
@@ -75,7 +69,6 @@ def get_path():
     goal_client.send_goal(goal)
     goal_client.wait_for_result()
     path = goal_client.get_result().path
-    gain = goal_client.get_result().gain
     # Call move with path from action server
     move(path)
 
